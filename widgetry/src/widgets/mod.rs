@@ -20,6 +20,7 @@ pub mod autocomplete;
 pub mod button;
 pub mod compare_times;
 pub mod containers;
+pub mod drag_drop;
 pub mod dropdown;
 pub mod fan_chart;
 pub mod filler;
@@ -74,6 +75,8 @@ pub enum Outcome {
     /// A dropdown, checkbox, spinner, etc changed values. The name of the changed widget is
     /// returned, but not the value, since its type is generic.
     Changed(String),
+    /// On a DragDrop widget, a member changed from an old position to a new position
+    DragDropReordered(String, usize, usize),
     /// Nothing happened
     Nothing,
 }
