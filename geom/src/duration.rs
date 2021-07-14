@@ -64,6 +64,10 @@ impl Duration {
         (x as f64) * Duration::EPSILON
     }
 
+    pub fn abs(&self) -> Self {
+        Self(self.0.abs())
+    }
+
     /// Returns the duration in seconds. Prefer working in typesafe `Duration`s.
     // TODO Remove if possible.
     pub fn inner_seconds(self) -> f64 {
@@ -81,7 +85,7 @@ impl Duration {
         remainder -= minutes * 60.0;
         let seconds = remainder.floor();
         remainder -= seconds;
-        let centis = (remainder / 0.1).floor();
+        let centis = (remainder / 0.01).round();
 
         (
             hours as usize,
@@ -163,8 +167,8 @@ impl Duration {
 
     // TODO Do something fancier? http://vis.stanford.edu/papers/tick-labels
     // TODO Unit test me
-    /// Returns (rounded max, the boundaries in number of minutes)
-    pub fn make_intervals_for_max(self, num_labels: usize) -> (Duration, Vec<usize>) {
+    /// Returns (rounded max, the boundaries)
+    pub fn make_intervals_for_max(self, num_labels: usize) -> (Duration, Vec<Duration>) {
         // Example 1: 43 minutes, max 5 labels... raw_mins_per_interval is 8.6
         let raw_mins_per_interval = (self.num_minutes_rounded_up() as f64) / (num_labels as f64);
         // So then this rounded up to 10 minutes
@@ -185,7 +189,9 @@ impl Duration {
         }
 
         let max = (num_labels as f64) * Duration::minutes(mins_per_interval);
-        let labels = (0..=num_labels).map(|i| i * mins_per_interval).collect();
+        let labels = (0..=num_labels)
+            .map(|i| Duration::minutes(i * mins_per_interval))
+            .collect();
 
         if max < self {
             panic!(
@@ -194,6 +200,50 @@ impl Duration {
             );
         }
         (max, labels)
+    }
+
+    /// Shows only the largest unit (hours, minute, seconds), rounded to `precision` decimal points.
+    ///
+    /// ```
+    /// use geom::Duration;
+    /// assert_eq!(Duration::seconds(3600.0).to_rounded_string(0), "1hr");
+    /// assert_eq!(Duration::seconds(3600.0).to_rounded_string(1), "1.0hr");
+    /// assert_eq!(Duration::seconds(7800.0).to_rounded_string(0), "2hr");
+    /// assert_eq!(Duration::seconds(800.0).to_rounded_string(1), "13.3min");
+    /// assert_eq!(Duration::seconds(-800.0).to_rounded_string(1), "-13.3min");
+    /// assert_eq!(Duration::seconds(0.0).to_rounded_string(0), "0");
+    /// assert_eq!(Duration::seconds(12.5).to_rounded_string(1), "12.5s");
+    /// assert_eq!(Duration::seconds(12.5).to_rounded_string(2), "12.50s");
+    /// ```
+    pub fn to_rounded_string(self, precision: usize) -> String {
+        let (hours, minutes, seconds, remainder) = self.get_parts();
+        if hours == 0 && minutes == 0 && seconds == 0 && remainder == 0 {
+            return "0".to_string();
+        }
+
+        let sign = if self < Duration::ZERO { "-" } else { "" };
+
+        let (whole, part, unit) = {
+            if hours != 0 {
+                let whole = hours as f64;
+                let part = minutes as f64 / 60.0;
+                let unit = "hr";
+                (whole, part, unit)
+            } else if minutes != 0 {
+                let whole = minutes as f64;
+                let part = seconds as f64 / 60.0;
+                let unit = "min";
+                (whole, part, unit)
+            } else {
+                let whole = seconds as f64;
+                let part = remainder as f64 / 100.0;
+                let unit = "s";
+                (whole, part, unit)
+            }
+        };
+
+        let number = format!("{:.1$}", whole + part, precision);
+        return format!("{}{}{}", sign, number, unit);
     }
 
     /// Describes the duration according to formatting rules.
@@ -361,7 +411,7 @@ mod tests {
         assert_eq!("0s", Duration::ZERO.to_string(&dont_round));
         assert_eq!("0s", Duration::seconds(0.001).to_string(&dont_round));
         assert_eq!(
-            "1min 30.1s",
+            "1min 30.12s",
             Duration::seconds(90.123).to_string(&dont_round)
         );
         assert_eq!("1min 30s", Duration::seconds(90.123).to_string(&round));
